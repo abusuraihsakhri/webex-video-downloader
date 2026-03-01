@@ -1,0 +1,146 @@
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <style>
+        body {
+            width: 20em;
+            font-size: 100%;
+            margin: 1em;
+            background-color: #fcfcfc;
+            font-family: sans-serif;
+        }
+
+        #success label {
+            font-size: 90%;
+        }
+
+        #content {
+            width: 100%;
+            height: 7em;
+            resize: none;
+        }
+
+        #copy {
+            margin-top: 1em;
+        }
+
+        #download {
+            margin-top: 1.5em;
+        }
+
+        .subtitle {
+            margin-bottom: .8em;
+        }
+
+        .title {
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .fail {
+            background-color: rgb(248, 201, 201);
+        }
+
+        #chat {
+            margin-top: 0.5em;
+        }
+
+        li {
+            margin-bottom: .5em;
+        }
+
+        a {
+            color: black;
+        }
+
+        .image {
+            width: 80%;
+            display: block;
+        }
+
+        #protip {
+            font-size: 90%;
+        }
+
+        hr {
+            opacity: 20%;
+        }
+
+        #updates-available {
+            background-color: gold;
+            border-radius: 2px;
+            height: 1.8em;
+            text-align: center;
+            padding-top: 0.5em;
+            margin-bottom: 0.8em;
+            border: 1px solid orange;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="updates-available" style="display: none;">
+        <!-- Custom updates link removed -->
+    </div>
+    <div id="errpage" style="display: none;">
+        <div class="title">Whoops</div>
+        <br>
+        This extension only works on the playback page of a Webex meeting recording.
+    </div>
+    <div id="fail" style="display: none;">
+        <div class="title">That didn't work</div>
+        <br>
+        Some error occurred while processing the page. Here's what you can try:
+        <ul>
+            <li>Refresh and try again; sometimes it just works</li>
+            <li>If you are using incognito mode, try with a normal browser window instead</li>
+        </ul>
+        <br>
+        <div>The following exception was raised:</div>
+        <br>
+        <code id="error-message"></code>
+    </div>
+    <div id="loading">
+        <div class="title">Loading</div>
+        <br>
+        Please wait while I fetch the video stream...
+    </div>
+    <div id="success" style="display: none;">
+        <div class="title">Success!</div>
+        <br>
+        <div class="subtitle">HLS stream URL:</div>
+        <textarea id="content" disabled></textarea>
+        <input id="copy" type="button" value="Copy to clipboard" />
+        <br><br>
+        <div id="chat" style="display: none;">
+            <div class="subtitle">Chat transcript:</div>
+            <input checked name="chat" type="radio" id="chat-opt"></input>
+            <label for="chat-opt">Plain text</label>
+            <br>
+            <input name="chat" type="radio" id="json-opt"></input>
+            <label for="json-opt">JSON format</label>
+            <br>
+            <input id="download" type="button" value="Download" />
+        </div>
+    </div>
+    <div id="protip" style="display: none">
+        <br>
+        <hr>
+        <div><i>Pro tip: to just download the recording, look for the download icon near the title. You didn't need to
+                open this menu.</i></div>
+        <br>
+        <img src="image.png" class="image" />
+        <br>
+        <input type="checkbox" id="hide-protip"></input>
+        <label for="hide-protip">I know, don't show this again</label>
+        <br>
+    </div>
+    <div style="text-align: center; margin-top: 1.5em; font-size: 0.8em; color: #888; font-style: italic;">
+        Developed by Abu Suraih Sakhri
+    </div>
+</body>
+
+</html>
+<script src="options.js"></script>
+<script src="popup.js"></script>
