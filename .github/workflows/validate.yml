@@ -45,3 +45,45 @@ jobs:
           name: webxdownloader-${{ github.sha }}
           path: webxdownloader.zip
           if-no-files-found: error
+
+  release:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build release package
+        run: |
+          cd src
+          zip -r ../webxdownloader.zip .
+
+      - name: Publish version release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(node -p "require('./src/manifest.json').version")"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid manifest version: $VERSION"
+            exit 1
+          fi
+
+          TAG="v$VERSION"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to publish."
+            exit 0
+          fi
+
+          gh release create "$TAG" webxdownloader.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "WebXDownloader $VERSION" \
+            --notes "Validated Chromium extension package for WebXDownloader $VERSION. Extract webxdownloader.zip and load the extracted folder as an unpacked extension."

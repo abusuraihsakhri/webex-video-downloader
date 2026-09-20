@@ -16,6 +16,16 @@ WebXDownloader is a Manifest V3 browser extension for authorized Webex recording
 
 The extension is intended for Chromium-based browsers such as Chrome, Edge, and Brave.
 
+### Packaged release
+
+1. Download `webxdownloader.zip` from the latest GitHub Release.
+2. Extract the ZIP.
+3. Open the browser's extensions page (`chrome://extensions/` or `edge://extensions/`).
+4. Enable **Developer mode**.
+5. Choose **Load unpacked** and select the extracted folder.
+
+### From source
+
 1. Clone or download this repository.
 2. Open the browser's extensions page (`chrome://extensions/` or `edge://extensions/`).
 3. Enable **Developer mode**.
@@ -60,7 +70,7 @@ node --check src/utils.js
 node tests/validate.mjs
 ```
 
-The same checks run in GitHub Actions on pushes and pull requests targeting `master`.
+The same checks run in GitHub Actions on pushes and pull requests targeting `master`. Successful versioned pushes also publish a ZIP package as a GitHub Release when that version does not already have a release.
 
 ## Compatibility and limitations
 
