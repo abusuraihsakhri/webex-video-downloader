@@ -1,236 +1,212 @@
-const REGEX = /^https?:\/\/(.+?)\.webex\.com\/(?:recordingservice|webappng)\/sites\/([^\/]+)\/.*?([a-f0-9]{32})[^\?]*(\?.*)?/g
+(function initPopup() {
+    "use strict";
 
-function copyLink() {
-    let text = document.getElementById("content");
-    navigator.clipboard.writeText(text.value).then(() => {
-        text.blur();
-    }).catch(err => {
-        console.error('Failed to copy text: ', err);
-    });
-}
+    let chatMessages = [];
+    let recordingParams = null;
 
-function downloadChat() {
-    let download = document.getElementById("download");
-    let link = document.createElement("a");
-    let title = document.getElementById("content").dataset.title;
-    if (document.getElementById("chat-opt").checked) {
-        link.download = `${title}_chat.txt`;
-        let chatData = JSON.parse(download.dataset.content);
-        let out = [];
-        for (let i = 0; i < chatData.length; i++) {
-            let m = chatData[i];
-            out.push(`${m.timecode} - ${m.name}\n${m.message}`);
+    const byId = (id) => document.getElementById(id);
+
+    function setView(id) {
+        for (const view of document.querySelectorAll(".view")) {
+            view.hidden = view.id !== id;
         }
-        let file = out.join("\n\n") + "\n";
-        link.href = `data:application/octet-stream;charset=utf-8,${encodeURIComponent(file)}`;
-    } else if (document.getElementById("json-opt").checked) {
-        link.download = `${title}_chat.json`;
-        link.href = `data:application/octet-stream;charset=utf-8,${encodeURIComponent(download.dataset.content)}`;
-    }
-    link.click();
-    if (navigator.userAgent.indexOf("Safari") > -1) {
-        chrome.runtime.sendMessage({ safariOpenUrl: link.href })
-    }
-}
-
-function renderSuccess(title, url, chat) {
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("success").style.display = "block";
-    document.getElementById("content").innerText = url;
-    document.getElementById("content").dataset.content = url;
-    document.getElementById("content").dataset.title = title;
-    document.getElementById("copy").onclick = copyLink;
-    if (chat.length > 0) {
-        document.getElementById("chat").style.display = "block";
-        document.getElementById("download").dataset.content = JSON.stringify(chat);
-        document.getElementById("download").onclick = downloadChat;
-    }
-}
-
-function renderFailure() {
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("errpage").style.display = "block";
-}
-
-function renderException(exception) {
-    document.body.classList.add("fail");
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("fail").style.display = "block";
-    document.getElementById("error-message").textContent = exception.message;
-}
-
-/**
- * Check for updates for this extension.
- */
-function checkUpdates() {
-    // Update checks removed for custom version
-}
-
-/**
- * Given a time value in absolute number of seconds,
- * it returns a string in the format `HH:mm:ss`.
- * @param {number} absTime
- */
-function timeCode(absTime) {
-    const date = new Date(parseInt(absTime));
-    const hour = ("0" + date.getHours()).slice(-2);
-    const minute = ("0" + date.getMinutes()).slice(-2);
-    const second = ("0" + date.getSeconds()).slice(-2);
-    return `${hour}:${minute}:${second}`;
-}
-
-/**
- * Process a JSON-formatted response obtained from a WebEx page.
- */
-function parseParametersFromResponse(response) {
-    // Alias used to centralize response values
-    const streamOption = response["mp4StreamOption"];
-
-    // Get the data we need to get the video stream
-    const host = streamOption["host"];
-    const recordingDir = streamOption["recordingDir"];
-    const timestamp = streamOption["timestamp"];
-    const token = streamOption["token"];
-    const xmlName = streamOption["xmlName"];
-    const playbackOption = streamOption["playbackOption"];
-    const siteid = streamOption["siteid"];
-    const recordid = streamOption["recordid"];
-    const islogin = streamOption["islogin"];
-    const isprevent = streamOption["isprevent"];
-    const ispwd = streamOption["ispwd"];
-
-    const hlsUrl = response["downloadRecordingInfo"]["downloadInfo"]["hlsURL"];
-
-    return {
-        host,
-        recordingDir,
-        timestamp,
-        token,
-        xmlName,
-        playbackOption,
-        siteid,
-        recordid,
-        islogin,
-        isprevent,
-        ispwd,
-        hlsUrl
-    }
-}
-
-function composeStreamURL(params) {
-    // Recordings before May 2022
-    if (params["recordingDir"] !== undefined) {
-        const url = new URL("apis/html5-pipeline.do", params.host);
-        url.searchParams.set("recordingDir", params.recordingDir);
-        url.searchParams.set("timestamp", params.timestamp);
-        url.searchParams.set("token", params.token);
-        url.searchParams.set("xmlName", params.xmlName);
-        url.searchParams.set("isMobileOrTablet", "false");
-        url.searchParams.set("ext", params.playbackOption);
-
-        return url;
-    }
-    // Recordings from May 2022
-    else if (params["siteid"] !== undefined) {
-        const url = new URL("nbr/MultiThreadDownloadServlet/recording.xml", params.host);
-        url.searchParams.set("siteid", params.siteid);
-        url.searchParams.set("recordid", params.recordid);
-        url.searchParams.set("ticket", params.token);
-        url.searchParams.set("timestamp", params.timestamp);
-        url.searchParams.set("islogin", params.islogin);
-        url.searchParams.set("isprevent", params.isprevent);
-        url.searchParams.set("ispwd", params.ispwd);
-        url.searchParams.set("play", "1");
-
-        return url;
     }
 
-    return null;
-}
-
-function checkResponseForErrors(response) {
-    let validResponse = true;
-
-    if (chrome.runtime.lastError) {
-        console.log(chrome.runtime.lastError);
-        renderFailure();
-        validResponse = false;
+    function renderFailure() {
+        setView("errpage");
     }
 
-    if (response == -1) {
-        renderFailure();
-        validResponse = false;
-    } else if (!response) {
-        renderException(new Error("Received null response"));
-        validResponse = false;
+    function renderException(error) {
+        const message = error instanceof Error ? error.message : String(error?.message || error || "Unknown error");
+        byId("error-message").textContent = message;
+        setView("fail");
     }
 
-    return validResponse;
-}
+    async function copyLink() {
+        const button = byId("copy");
+        try {
+            await navigator.clipboard.writeText(byId("content").value);
+            button.textContent = "Copied";
+            setTimeout(() => { button.textContent = "Copy URL"; }, 1000);
+        } catch (error) {
+            renderException(error);
+        }
+    }
 
-function isThisAWebExPage(url) {
-    const match = REGEX.exec(url);
-    if (!match) renderFailure();
-    return match !== null;
-}
+    function downloadBlob(filename, content, type) {
+        const blob = new Blob([content], { type });
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    }
 
-function callback(tabs) {
-    // Check for extension update
-    checkUpdates();
+    function downloadChat() {
+        if (!chatMessages.length) return;
 
-    // Check if this URL is of a WebEx page
-    if (!isThisAWebExPage(tabs[0].url)) return;
+        const baseName = WebXUtils.sanitizeFilename(recordingParams?.recordName || "webex-recording");
+        if (byId("chat-opt").checked) {
+            const content = chatMessages
+                .map((message) => `${message.timecode} - ${message.name}\n${message.message}`)
+                .join("\n\n") + "\n";
+            downloadBlob(`${baseName}_chat.txt`, content, "text/plain;charset=utf-8");
+            return;
+        }
 
-    chrome.tabs.sendMessage(tabs[0].id, {
-        apiResponse: true
-    }, (response) => {
-        // Check if the response is valid
-        if (!checkResponseForErrors(response)) return;
+        downloadBlob(
+            `${baseName}_chat.json`,
+            JSON.stringify(chatMessages, null, 2),
+            "application/json;charset=utf-8"
+        );
+    }
 
-        // Get the useful parameters from the received response
-        const params = parseParametersFromResponse(response);
+    function downloadVideo() {
+        if (!recordingParams?.fallbackPlaySrc) return;
+        chrome.runtime.sendMessage({
+            type: "downloadRecording",
+            url: String(recordingParams.fallbackPlaySrc),
+            filename: `${WebXUtils.sanitizeFilename(recordingParams.recordName)}.mp4`
+        });
+    }
 
-        // Compose the URL from which to get the video stream to download
-        const streamURL = composeStreamURL(params);
+    function renderSuccess(hlsUrl, messages, chatStatus = "") {
+        chatMessages = Array.isArray(messages) ? messages : [];
+        byId("content").value = String(hlsUrl || "");
 
-        if (streamURL === null) renderException({ message: "Stream URL is null" });
+        const videoButton = byId("download-video");
+        videoButton.disabled = !recordingParams?.fallbackPlaySrc;
+        videoButton.title = videoButton.disabled ? "MP4 download URL was not provided by Webex" : "Download MP4 recording";
 
-        fetch(streamURL.toString())
-            .then(response => response.text())
-            .then(text => (new window.DOMParser()).parseFromString(text, "text/xml"))
-            .then(data => {
-                // Convert from HTMLCollection to array
-                const messages = [...data.getElementsByTagName("Message")];
+        byId("chat").hidden = chatMessages.length === 0;
+        const chatStatusElement = byId("chat-status");
+        chatStatusElement.hidden = chatMessages.length > 0 || !chatStatus;
+        chatStatusElement.textContent = chatStatus;
 
-                // Parse the messages in the chat
-                const chat = messages.map((message) => {
-                    // First get the HTML Elements
-                    const datetimeElement = message.getElementsByTagName("DateTimeUTC");
-                    const nameElement = message.getElementsByTagName("LoginName");
-                    const messageElement = message.getElementsByTagName("Content");
+        setView("success");
+        PopupSettings.ready.then(() => {
+            byId("protip").hidden = !PopupSettings.shouldShowTip();
+        });
+    }
 
-                    // Check the existence of the data
-                    return {
-                        "timecode": datetimeElement.length > 0 ? timeCode(datetimeElement[0].textContent) : "00:00:00",
-                        "name": nameElement.length > 0 ? nameElement[0].textContent : "Name unavailable",
-                        "message": messageElement.length > 0 ? messageElement[0].textContent : "Message unavailable",
-                    };
-                });
+    function parseChat(xmlDocument) {
+        const parserError = xmlDocument.querySelector("parsererror");
+        if (parserError) throw new Error("Webex returned an invalid transcript document");
 
-                // Compose the hls URL if necessary
-                let hlsUrl = params.hlsUrl;
-                if (hlsUrl === undefined) {
-                    const filename = data.getElementsByTagName("Sequence")[0].textContent;
-                    hlsUrl = `${params.host}/hls-vod/recordingDir/${params.recordingDir}/timestamp/${params.timestamp}/token/${params.token}/fileName/${filename}.m3u8`;
-                }
+        return [...xmlDocument.getElementsByTagName("Message")].map((message) => {
+            const getText = (tag, fallback) => message.getElementsByTagName(tag)[0]?.textContent || fallback;
+            return {
+                timecode: WebXUtils.formatTimeCode(getText("DateTimeUTC", "")),
+                name: getText("LoginName", "Name unavailable"),
+                message: getText("Content", "Message unavailable")
+            };
+        });
+    }
 
-                const meetingName = response["recordName"];
-                renderSuccess(meetingName, hlsUrl, chat);
-            })
-            .catch(ex => renderException(ex));
-    });
-}
+    function buildFallbackHlsUrl(params, xmlDocument) {
+        if (params.hlsUrl) return params.hlsUrl;
+        if (!params.host || params.recordingDir === undefined || params.timestamp === undefined || !params.token) return null;
 
-// Get the currently focused tab
-const query = { active: true, currentWindow: true };
-chrome.tabs.query(query, callback);
+        const sequence = xmlDocument.getElementsByTagName("Sequence")[0]?.textContent;
+        if (!sequence) return null;
+
+        try {
+            const url = new URL(params.host);
+            const segments = [
+                "hls-vod",
+                "recordingDir", params.recordingDir,
+                "timestamp", params.timestamp,
+                "token", params.token,
+                "fileName", `${sequence}.m3u8`
+            ].map((segment) => encodeURIComponent(String(segment)));
+            url.pathname = `/${segments.join("/")}`;
+            url.search = "";
+            url.hash = "";
+            return url.toString();
+        } catch (_error) {
+            return null;
+        }
+    }
+
+    async function processApiResponse(response) {
+        recordingParams = WebXUtils.extractResponseParameters(response);
+        if (!recordingParams) throw new Error("Webex recording metadata is unavailable");
+
+        const streamUrl = WebXUtils.composeStreamURL(recordingParams);
+        if (!streamUrl) {
+            if (recordingParams.hlsUrl) {
+                renderSuccess(recordingParams.hlsUrl, [], "Chat transcript is unavailable for this recording.");
+                return;
+            }
+            throw new Error("Webex did not provide a usable stream URL");
+        }
+
+        try {
+            const streamResponse = await fetch(streamUrl.toString(), { credentials: "include" });
+            if (!streamResponse.ok) throw new Error(`Transcript request returned HTTP ${streamResponse.status}`);
+            const xmlText = await streamResponse.text();
+            const xmlDocument = new DOMParser().parseFromString(xmlText, "text/xml");
+            const messages = parseChat(xmlDocument);
+            const hlsUrl = buildFallbackHlsUrl(recordingParams, xmlDocument);
+            if (!hlsUrl) throw new Error("Webex did not provide an HLS stream URL");
+            renderSuccess(hlsUrl, messages, messages.length ? "" : "No chat transcript was found.");
+        } catch (error) {
+            if (recordingParams.hlsUrl) {
+                renderSuccess(recordingParams.hlsUrl, [], "The HLS URL is available, but the chat transcript could not be read.");
+                return;
+            }
+            throw error;
+        }
+    }
+
+    function requestApiResponse(tabId, attemptsRemaining = 5) {
+        chrome.tabs.sendMessage(tabId, { type: "getApiResponse" }, (response) => {
+            if (chrome.runtime.lastError) {
+                renderFailure();
+                return;
+            }
+
+            if (response === -1 && attemptsRemaining > 1) {
+                setTimeout(() => requestApiResponse(tabId, attemptsRemaining - 1), 300);
+                return;
+            }
+
+            if (response === -1) {
+                renderException(new Error("The recording is still loading. Reopen the popup after playback is ready."));
+                return;
+            }
+
+            if (!response) {
+                renderException(new Error("The Webex recording metadata request failed."));
+                return;
+            }
+
+            processApiResponse(response).catch(renderException);
+        });
+    }
+
+    function initialize() {
+        byId("copy").addEventListener("click", copyLink);
+        byId("download-chat").addEventListener("click", downloadChat);
+        byId("download-video").addEventListener("click", downloadVideo);
+
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (chrome.runtime.lastError || !tabs?.length || !tabs[0].url) {
+                renderFailure();
+                return;
+            }
+
+            if (!WebXUtils.parseRecordingUrl(tabs[0].url)) {
+                renderFailure();
+                return;
+            }
+
+            requestApiResponse(tabs[0].id);
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", initialize);
+}());

@@ -1,0 +1,47 @@
+name: Validate extension
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check src/background.js
+          node --check src/content.js
+          node --check src/options.js
+          node --check src/popup.js
+          node --check src/utils.js
+
+      - name: Run extension validation tests
+        run: node tests/validate.mjs
+
+      - name: Package extension
+        if: github.event_name == 'push'
+        run: |
+          cd src
+          zip -r ../webxdownloader.zip .
+
+      - name: Upload extension artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: webxdownloader-${{ github.sha }}
+          path: webxdownloader.zip
+          if-no-files-found: error
